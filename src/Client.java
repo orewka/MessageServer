@@ -26,11 +26,7 @@ public class Client {
             while (true) {
                 System.out.println("Введите сообщение");
                 messageText = scanner.nextLine();
-                try {
                     sendMessage(name, messageText, connection);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
             }
         }
     }
@@ -54,9 +50,7 @@ public class Client {
                     try {
                         message = connection.readMessage();
                         System.out.println(message.getDate() + " " + message.getSender() + " : " + message.getText());
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } catch (ClassNotFoundException e) {
+                    } catch (IOException | ClassNotFoundException e) {
                         e.printStackTrace();
                     }
                 }
@@ -72,8 +66,6 @@ public class Client {
             int port = Integer.parseInt(properties.getProperty("port"));
             Client client = new Client(server, port);
             client.start();
-        } catch (IOException e) {
-            e.printStackTrace();
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -13,18 +13,18 @@ public class Server {
         this.port = port;
     }
 
-    public void start() throws IOException, ClassNotFoundException {
+    public void start() throws IOException {
         LinkedBlockingDeque<Message> messageLinkedBlockingDeque = new LinkedBlockingDeque<>();
-        Map<Socket, Connection> stringConnectionMap = new HashMap<>();
+        Map<Socket, Connection> socketConnectionMap = new HashMap<>();
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Старт");
-            Thread sendMessages = new Thread(new SendMessages(messageLinkedBlockingDeque, stringConnectionMap));
+            Thread sendMessages = new Thread(new SendMessages(messageLinkedBlockingDeque, socketConnectionMap));
             sendMessages.start();
             Socket clientSocket;
             while (true) {
-                if (!stringConnectionMap.containsKey(clientSocket = serverSocket.accept())) {
-                    stringConnectionMap.put(clientSocket, connection = new Connection(clientSocket));
-                    Thread readMessage = new Thread(new ReadMessage(connection, messageLinkedBlockingDeque));
+                if (!socketConnectionMap.containsKey(clientSocket = serverSocket.accept())) {
+                    socketConnectionMap.put(clientSocket, connection = new Connection(clientSocket));
+                    Thread readMessage = new Thread(new ReadMessage(connection, messageLinkedBlockingDeque, socketConnectionMap));
                     readMessage.start();
                 }
             }
@@ -34,20 +34,27 @@ public class Server {
     class ReadMessage implements Runnable {
         private Connection connection;
         private LinkedBlockingDeque<Message> messageLinkedBlockingDeque;
+        private Map<Socket, Connection> socketConnectionMap;
 
-        public ReadMessage(Connection connection, LinkedBlockingDeque<Message> messageLinkedBlockingDeque) {
+        public ReadMessage(Connection connection, LinkedBlockingDeque<Message> messageLinkedBlockingDeque, Map<Socket, Connection> socketConnectionMap) {
             this.messageLinkedBlockingDeque = messageLinkedBlockingDeque;
             this.connection = connection;
+            this.socketConnectionMap = socketConnectionMap;
         }
 
         @Override
         public void run() {
             Message message;
-            while (true) {
+            System.out.println("Юзер +");
+            while (!Thread.currentThread().isInterrupted()) {
                 try {
                     message = connection.readMessage();
                     messageLinkedBlockingDeque.add(message);
-                } catch (IOException | ClassNotFoundException e) {
+                } catch (IOException e) {
+                    socketConnectionMap.remove(connection.getSocket());
+                    Thread.currentThread().interrupt();
+                    System.out.println("Юзер -");
+                } catch (ClassNotFoundException e) {
                     e.printStackTrace();
                 }
             }
@@ -86,7 +93,7 @@ public class Server {
         Server server = new Server(port);
         try {
             server.start();
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }

@@ -13,18 +13,20 @@ public class Server {
         this.port = port;
     }
 
-    public void start() throws IOException {
+    public void start() throws IOException, ClassNotFoundException {
         LinkedBlockingDeque<Message> messageLinkedBlockingDeque = new LinkedBlockingDeque<>();
-        Map<String, Connection> stringConnectionMap = new HashMap<>();
+        Map<Socket, Connection> stringConnectionMap = new HashMap<>();
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Старт");
-            Thread sendMessages = new Thread(new SendMessages(connection, messageLinkedBlockingDeque, stringConnectionMap));
+            Thread sendMessages = new Thread(new SendMessages(messageLinkedBlockingDeque, stringConnectionMap));
             sendMessages.start();
+            Socket clientSocket;
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-                connection = new Connection(clientSocket);
-                Thread readMessage = new Thread(new ReadMessage(connection, messageLinkedBlockingDeque, stringConnectionMap));
-                readMessage.start();
+                if (!stringConnectionMap.containsKey(clientSocket = serverSocket.accept())) {
+                    stringConnectionMap.put(clientSocket, connection = new Connection(clientSocket));
+                    Thread readMessage = new Thread(new ReadMessage(connection, messageLinkedBlockingDeque));
+                    readMessage.start();
+                }
             }
         }
     }
@@ -32,12 +34,10 @@ public class Server {
     class ReadMessage implements Runnable {
         private Connection connection;
         private LinkedBlockingDeque<Message> messageLinkedBlockingDeque;
-        private Map<String, Connection> stringConnectionMap;
 
-        public ReadMessage(Connection connection, LinkedBlockingDeque<Message> messageLinkedBlockingDeque, Map<String, Connection> stringConnectionMap) {
-            this.connection = connection;
+        public ReadMessage(Connection connection, LinkedBlockingDeque<Message> messageLinkedBlockingDeque) {
             this.messageLinkedBlockingDeque = messageLinkedBlockingDeque;
-            this.stringConnectionMap = stringConnectionMap;
+            this.connection = connection;
         }
 
         @Override
@@ -47,10 +47,7 @@ public class Server {
                 try {
                     message = connection.readMessage();
                     messageLinkedBlockingDeque.add(message);
-                    stringConnectionMap.put(message.getSender(), connection);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (ClassNotFoundException e) {
+                } catch (IOException | ClassNotFoundException e) {
                     e.printStackTrace();
                 }
             }
@@ -58,12 +55,10 @@ public class Server {
     }
 
     class SendMessages implements Runnable {
-        private Connection connection;
         private LinkedBlockingDeque<Message> messageLinkedBlockingDeque;
-        private Map<String, Connection> stringConnectionMap;
+        private Map<Socket, Connection> stringConnectionMap;
 
-        public SendMessages(Connection connection, LinkedBlockingDeque<Message> messageLinkedBlockingDeque, Map<String, Connection> stringConnectionMap) {
-            this.connection = connection;
+        public SendMessages(LinkedBlockingDeque<Message> messageLinkedBlockingDeque, Map<Socket, Connection> stringConnectionMap) {
             this.messageLinkedBlockingDeque = messageLinkedBlockingDeque;
             this.stringConnectionMap = stringConnectionMap;
         }
@@ -74,8 +69,8 @@ public class Server {
             while (true) {
                 try {
                     sendMessage = messageLinkedBlockingDeque.take();
-                    for (Map.Entry<String, Connection> entry: stringConnectionMap.entrySet()) {
-                        if (!entry.getValue().getSocket().equals(sendMessage.getSocket())) {
+                    for (Map.Entry<Socket, Connection> entry: stringConnectionMap.entrySet()) {
+                        if (!entry.getKey().equals(sendMessage.getSocket())) {
                             entry.getValue().sendMessage(sendMessage);
                         }
                     }
@@ -91,7 +86,7 @@ public class Server {
         Server server = new Server(port);
         try {
             server.start();
-        } catch (IOException e) {
+        } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
     }
